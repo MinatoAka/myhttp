@@ -73,11 +73,3 @@ client.Do(req) Execute raw http.Request.
 ```bash
 go test -v ./...
 ```
-
-📄 License
-
-This project is licensed under the MIT License.
-
-```
-
----
