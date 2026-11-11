@@ -1,31 +1,42 @@
 package myhttp
 
 import (
-    "net/http"
-    "sync"
-    "time"
+	"net/http"
+	"sync"
+	"time"
 )
 
 // rateLimitTransport — RoundTripper yang rate limit
 type rateLimitTransport struct {
-    base    http.RoundTripper
-    ticker  *time.Ticker
-    mu      sync.Mutex
-    lastReq time.Time
+	base     http.RoundTripper
+	interval time.Duration
+	mu       sync.Mutex
+	lastReq  time.Time
 }
 
 func newRateLimitTransport(base http.RoundTripper, reqPerSec int) *rateLimitTransport {
-    interval := time.Second / time.Duration(reqPerSec)
-    return &rateLimitTransport{
-        base:   base,
-        ticker: time.NewTicker(interval),
-    }
+	return &rateLimitTransport{
+		base:     base,
+		interval: time.Second / time.Duration(reqPerSec),
+	}
 }
 
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-    t.mu.Lock()
-    <-t.ticker.C // tunggu sampai "jatah" berikutnya tersedia
-    t.mu.Unlock()
+	// Kunci agar request lain menunggu giliran
+	t.mu.Lock()
+	
+	// Hitung waktu yang berlalu sejak request terakhir
+	elapsed := time.Since(t.lastReq)
+	if elapsed < t.interval {
+		// Jika terlalu cepat, tidur sejenak
+		time.Sleep(t.interval - elapsed)
+	}
+	
+	// Catat waktu request ini
+	t.lastReq = time.Now()
+	
+	// Lepas kunci
+	t.mu.Unlock()
 
-    return t.base.RoundTrip(req)
+	return t.base.RoundTrip(req)
 }
