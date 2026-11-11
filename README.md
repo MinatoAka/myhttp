@@ -1,5 +1,10 @@
 # myhttp
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/MinatoAka/myhttp.svg)](https://pkg.go.dev/github.com/MinatoAka/myhttp)
+[![Go Report Card](https://goreportcard.com/badge/github.com/MinatoAka/myhttp)](https://goreportcard.com/report/github.com/MinatoAka/myhttp)
+[![GitHub stars](https://img.shields.io/github/stars/MinatoAka/myhttp)](https://github.com/MinatoAka/myhttp/stargazers)
+[![Support via Saweria](https://img.shields.io/badge/Support%20via-Saweria-orange)](https://saweria.co/AKaAturDompet)
+
 A lightweight, production-ready HTTP client for Go with built-in Retry, Rate Limiting, and User-Agent injection.
 
 ## ✨ Features
