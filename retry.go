@@ -20,7 +20,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var lastErr error
 	wait := t.wait
 
-	// 🛡️ FIX BUG 1: Baca Body sekali di awal, simpan di memori
+	// FIX BUG 1: Baca Body sekali di awal, simpan di memori
 	var bodyBytes []byte
 	if req.Body != nil {
 		var err error
@@ -35,7 +35,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// Clone request
 		r := req.Clone(req.Context())
 		
-		// 🛡️ FIX BUG 1: Selalu buat reader baru dari bodyBytes untuk setiap percobaan
+		// FIX BUG 1: Selalu buat reader baru dari bodyBytes untuk setiap percobaan
 		if bodyBytes != nil {
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
