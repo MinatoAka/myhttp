@@ -5,7 +5,9 @@ import (
     "net/http/httptest"
     "sync/atomic"
     "testing"
+    "strings"
     "time"
+    "io"
 )
 
 // TestRetryOn5xx — memastikan retry bekerja
@@ -82,3 +84,42 @@ func TestRateLimit(t *testing.T) {
         t.Errorf("terlalu cepat: %v (harusnya ≥400ms)", elapsed)
     }
 }
+
+// TestRetryPostBody — Memastikan body POST tidak hilang saat retry
+func TestRetryPostBody(t *testing.T) {
+	var attempts int32
+	var receivedBody string
+	
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		receivedBody = string(body)
+		
+		n := atomic.AddInt32(&attempts, 1)
+		if n < 3 {
+			w.WriteHeader(http.StatusInternalServerError) // Paksa retry
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := New(WithRetry(3, 10*time.Millisecond))
+	
+	// Kirim POST dengan body JSON
+	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(`{"pair":"ethidr"}`))
+	req.Header.Set("Content-Type", "application/json")
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Harusnya sukses, err: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Status = %d, mau 200", resp.StatusCode)
+	}
+	if receivedBody != `{"pair":"ethidr"}` {
+		t.Errorf("Body hilang saat retry! Diterima: %q", receivedBody)
+	}
+}
+
