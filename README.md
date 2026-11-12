@@ -46,7 +46,3 @@ Defaults: 3 retries, 1-second base wait, 15-second timeout, and `myhttp/1.0` Use
 ```bash
 go test ./...
 ```
-
-## License
-
-MIT. See [LICENSE](LICENSE).
