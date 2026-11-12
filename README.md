@@ -2,79 +2,51 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/MinatoAka/myhttp.svg)](https://pkg.go.dev/github.com/MinatoAka/myhttp)
 [![Go Report Card](https://goreportcard.com/badge/github.com/MinatoAka/myhttp)](https://goreportcard.com/report/github.com/MinatoAka/myhttp)
-[![GitHub stars](https://img.shields.io/github/stars/MinatoAka/myhttp)](https://github.com/MinatoAka/myhttp/stargazers)
-[![Support via Saweria](https://img.shields.io/badge/Support%20via-Saweria-orange)](https://saweria.co/AKaAturDompet)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Support via Saweria](https://img.shields.io/badge/Support-Saweria-orange)](https://saweria.co/AKaAturDompet)
 
-A lightweight, production-ready HTTP client for Go with built-in Retry, Rate Limiting, and User-Agent injection.
+A lightweight Go HTTP client with configurable retries, rate limiting, timeouts, and User-Agent. Uses only the standard library.
 
-## ✨ Features
-
-- 🔄 **Exponential Backoff with Jitter**: Retries failed requests gracefully without overwhelming the server (Thundering Herd).
-- 🛡️ **Safe Body Retry**: Automatically buffers request bodies so POST/PUT requests don't fail on retries.
-- ⏱️ **Rate Limiter**: Prevents 429 Too Many Requests by strictly limiting requests per second.
-- 🤖 **Custom User-Agent**: Automatically injects User-Agent into every request.
-- 🪶 **Zero Dependencies**: Built entirely on the Go standard library.
-- ✅ **Fully Tested**: Comprehensive unit tests using `httptest`.
-
-## 📦 Installation
+## Install
 
 ```bash
 go get github.com/MinatoAka/myhttp
 ```
 
-🚀 Quick Start
+## Quick start
 
 ```go
-package main
-
-import (
-	"fmt"
-	"io"
-	"time"
-
-	"github.com/MinatoAka/myhttp"
+client := myhttp.New(
+    myhttp.WithRetry(3, time.Second),
+    myhttp.WithRateLimit(5),
+    myhttp.WithTimeout(10*time.Second),
+    myhttp.WithUserAgent("myapp/1.0"),
 )
 
-func main() {
-	// Initialize client with custom configurations
-	client := myhttp.New(
-		myhttp.WithRetry(3, 1*time.Second),     // Retry 3x with 1s base wait
-		myhttp.WithRateLimit(5),                // Max 5 requests per second
-		myhttp.WithTimeout(10*time.Second),     // 10s timeout per request
-		myhttp.WithUserAgent("myapp/1.0"),      // Custom User-Agent
-	)
-
-	// Make a request
-	resp, err := client.Get("https://indodax.com/api/ticker/ethidr")
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
+resp, err := client.Get("https://example.com")
+if err != nil {
+    log.Fatal(err)
 }
+defer resp.Body.Close()
 ```
 
-📖 API Reference
+Import `github.com/MinatoAka/myhttp` and `time` in your Go file. Use `client.Do(req)` to send a custom `http.Request`.
 
-Options
+## Options
 
-Option Description
-WithRetry(retries, wait) Set max retries and base wait time (uses exponential backoff + jitter).
-WithRateLimit(reqPerSec) Limit requests to N per second.
-WithTimeout(duration) Set global timeout for requests.
-WithUserAgent(ua) Set custom User-Agent header.
+- `WithRetry(maxRetries, baseWait)` — retries network errors and HTTP 5xx responses with exponential backoff and jitter.
+- `WithRateLimit(reqPerSec)` — limits requests per second; `0` disables the limit.
+- `WithTimeout(duration)` — sets the request timeout.
+- `WithUserAgent(ua)` — sets the default User-Agent.
 
-Methods
+Defaults: 3 retries, 1-second base wait, 15-second timeout, and `myhttp/1.0` User-Agent. Rate limiting is disabled by default.
 
-Method Description
-New(opts ...Option) *Client Create a new client with optional configurations.
-client.Get(url) Shortcut for GET requests.
-client.Do(req) Execute raw http.Request.
-
-🧪 Testing
+## Test
 
 ```bash
-go test -v ./...
+go test ./...
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
