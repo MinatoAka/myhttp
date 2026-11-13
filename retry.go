@@ -2,6 +2,7 @@ package myhttp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -17,10 +18,13 @@ type retryTransport struct {
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
+
 	var lastErr error
 	wait := t.wait
+	attempts := 0
 
-	// FIX BUG 1: Baca Body sekali di awal, simpan di memori
+	// Baca Body sekali di awal, simpan di memori (biar bisa di-replay tiap attempt)
 	var bodyBytes []byte
 	if req.Body != nil {
 		var err error
@@ -32,10 +36,20 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	for attempt := 0; attempt <= t.retries; attempt++ {
+		// Context sudah mati? Jangan buang waktu untuk attempt yang pasti gagal
+		if err := ctx.Err(); err != nil {
+			if lastErr == nil {
+				lastErr = err
+			}
+			break
+		}
+
+		attempts++
+
 		// Clone request
-		r := req.Clone(req.Context())
-		
-		// FIX BUG 1: Selalu buat reader baru dari bodyBytes untuk setiap percobaan
+		r := req.Clone(ctx)
+
+		// Selalu buat reader baru dari bodyBytes untuk setiap percobaan
 		if bodyBytes != nil {
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
@@ -55,6 +69,11 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			lastErr = err
 		}
 
+		// Kalau penyebab gagalnya context mati → berhenti, jangan retry
+		if ctx.Err() != nil {
+			break
+		}
+
 		// Attempt terakhir → jangan tidur
 		if attempt == t.retries {
 			break
@@ -62,10 +81,32 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// Jitter: tambah waktu random 0-500ms (hindari thundering herd)
 		jitter := time.Duration(rand.Intn(500)) * time.Millisecond
-		time.Sleep(wait + jitter)
+
+		// Tidur yang bisa dibangunkan oleh context
+		if !sleepCtx(ctx, wait+jitter) {
+			break
+		}
 
 		wait *= 2 // Exponential backoff
 	}
 
-	return nil, fmt.Errorf("setelah %d retry: %w", t.retries+1, lastErr)
+	return nil, fmt.Errorf("gagal setelah %d attempt: %w", attempts, lastErr)
+}
+
+// sleepCtx — tidur selama d, tapi langsung bangun kalau context dibatalkan.
+// Return true kalau tidur selesai normal, false kalau dipotong context.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
