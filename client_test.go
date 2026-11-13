@@ -54,12 +54,12 @@ func TestUserAgent(t *testing.T) {
     }))
     defer server.Close()
 
-    client := New(WithUserAgent("jenderal/1.0"))
+    client := New(WithUserAgent("shinobi-bot@/1.0"))
     resp, _ := client.Get(server.URL)
     defer resp.Body.Close()
 
-    if gotUA != "jenderal/1.0" {
-        t.Errorf("UA = %q, mau %q", gotUA, "jenderal/1.0")
+    if gotUA != "shinobi-bot@/1.0" {
+        t.Errorf("UA = %q, mau %q", gotUA, "shinobi-bot@/1.0")
     }
 }
 
@@ -101,7 +101,7 @@ func TestRetryPostBody(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close()s#3
 
 	client := New(WithRetry(3, 10*time.Millisecond))
 	
