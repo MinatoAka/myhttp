@@ -60,11 +60,14 @@ Import `github.com/MinatoAka/myhttp` and `time` in your Go file.
 ## Behavior notes
 
 **Retries**
-- Triggered by network errors and HTTP `5xx` only.
-- `4xx` is returned immediately — check `resp.StatusCode` yourself.
-- Backoff doubles from `baseWait` (`1s → 2s → 4s`) plus random jitter of 0–500ms.
+- Triggered by network errors, HTTP `5xx`, and HTTP `429` (rate limited).
+- Other `4xx` (400/401/403/404) are returned immediately — check `resp.StatusCode` yourself.
+- If the server sends `Retry-After`, that value is used instead of backoff.
+  Both formats are supported: delta-seconds (`5`) and HTTP-date.
+- Otherwise backoff doubles from `baseWait` (`1s → 2s → 4s`) plus 0–500ms jitter, capped at 60s.
+- Sleep between attempts is context-aware: cancelling the request stops retries immediately.
 - When retries are exhausted, `Get`/`Do` return a **nil response** and an error wrapping the last failure.
-- Request bodies are read into memory once and replayed on each attempt, so POST/PUT retries are safe. Avoid streaming very large bodies.
+- Request bodies are buffered once and replayed on each attempt, so POST/PUT retries are safe.
 - `WithRetry(0, ...)` disables the retry layer entirely.
 
 **Rate limiting**
