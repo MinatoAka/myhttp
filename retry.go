@@ -7,8 +7,14 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
+
+// maxRetryWait — batas atas jeda antar attempt.
+// Mencegah Retry-After besar (misal 3600) bikin request menggantung.
+const maxRetryWait = 60 * time.Second
 
 // retryTransport — RoundTripper yang retry otomatis
 type retryTransport struct {
@@ -56,16 +62,18 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		resp, err := t.base.RoundTrip(r)
 
-		// Sukses → langsung return
-		if err == nil && resp.StatusCode < 500 {
+		// Sukses (bukan 5xx, bukan 429) → langsung return
+		if err == nil && !retryableStatus(resp.StatusCode) {
 			return resp, nil
 		}
 
-		// Error 5xx → retry (server sedang bermasalah)
-		if err == nil && resp.StatusCode >= 500 {
+		// Gagal → catat penyebab, ambil Retry-After kalau ada
+		var retryAfter time.Duration
+		if err == nil {
+			retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
 			resp.Body.Close()
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
-		} else if err != nil {
+		} else {
 			lastErr = err
 		}
 
@@ -79,18 +87,66 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			break
 		}
 
-		// Jitter: tambah waktu random 0-500ms (hindari thundering herd)
-		jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+		// Tentukan jeda
+		var delay time.Duration
+		if retryAfter > 0 {
+			// Server kasih tahu kapan boleh balik → pakai itu, backoff tidak dinaikkan
+			delay = retryAfter
+		} else {
+			// Jitter: random 0-500ms (hindari thundering herd)
+			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+			delay = wait + jitter
 
-		// Tidur yang bisa dibangunkan oleh context
-		if !sleepCtx(ctx, wait+jitter) {
-			break
+			wait *= 2 // Exponential backoff
+			if wait > maxRetryWait {
+				wait = maxRetryWait
+			}
+		}
+		if delay > maxRetryWait {
+			delay = maxRetryWait
 		}
 
-		wait *= 2 // Exponential backoff
+		// Tidur yang bisa dibangunkan oleh context
+		if !sleepCtx(ctx, delay) {
+			break
+		}
 	}
 
 	return nil, fmt.Errorf("gagal setelah %d attempt: %w", attempts, lastErr)
+}
+
+// retryableStatus — status yang layak dicoba lagi.
+// 5xx = server bermasalah, 429 = rate limit (sementara).
+// 4xx lain (400/401/403/404) tidak di-retry karena retry tidak akan menolong.
+func retryableStatus(code int) bool {
+	return code >= 500 || code == http.StatusTooManyRequests
+}
+
+// parseRetryAfter — baca header Retry-After.
+// Support dua format: delta-seconds ("5") dan HTTP-date ("Wed, 21 Oct 2026 07:28:00 GMT").
+// Return 0 kalau header kosong, tidak valid, atau waktunya sudah lewat.
+func parseRetryAfter(v string) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+
+	// Format 1: detik
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+
+	// Format 2: HTTP-date
+	if when, err := http.ParseTime(v); err == nil {
+		if d := time.Until(when); d > 0 {
+			return d
+		}
+	}
+
+	return 0
 }
 
 // sleepCtx — tidur selama d, tapi langsung bangun kalau context dibatalkan.
