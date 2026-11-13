@@ -2,9 +2,9 @@ package myhttp
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
+	"context"
 	"math/rand"
 	"net/http"
 	"strconv"
