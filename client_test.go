@@ -54,12 +54,12 @@ func TestUserAgent(t *testing.T) {
     }))
     defer server.Close()
 
-    client := New(WithUserAgent("shinobi-bot@/1.0"))
+    client := New(WithUserAgent("shinobi-bot/1.0"))
     resp, _ := client.Get(server.URL)
     defer resp.Body.Close()
 
-    if gotUA != "shinobi-bot@/1.0" {
-        t.Errorf("UA = %q, mau %q", gotUA, "shinobi-bot@/1.0")
+    if gotUA != "shinobi-bot/1.0" {
+        t.Errorf("UA = %q, mau %q", gotUA, "shinobi-bot/1.0")
     }
 }
 
