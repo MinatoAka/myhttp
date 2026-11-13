@@ -123,3 +123,37 @@ func TestRetryPostBody(t *testing.T) {
 	}
 }
 
+// TestRetryContextCancel — retry harus berhenti cepat saat context dibatalkan
+func TestRetryContextCancel(t *testing.T) {
+	var attempts int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	// Base wait besar: kalau tidur tidak sadar context, test ini bakal sangat lama
+	client := New(WithRetry(5, 2*time.Second))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("harusnya error karena context dibatalkan")
+	}
+
+	if elapsed > 1*time.Second {
+		t.Errorf("terlalu lama: %v (harusnya berhenti ~200ms)", elapsed)
+	}
+	if attempts > 2 {
+		t.Errorf("attempts = %d, harusnya berhenti cepat (≤2)", attempts)
+	}
+}
