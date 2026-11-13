@@ -101,7 +101,7 @@ func TestRetryPostBody(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()s#3
+	defer server.Close()
 
 	client := New(WithRetry(3, 10*time.Millisecond))
 	
