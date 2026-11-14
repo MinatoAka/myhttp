@@ -1,5 +1,6 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/MinatoAka/myhttp.svg)](https://pkg.go.dev/github.com/MinatoAka/myhttp)
 [![Auto Release](https://github.com/MinatoAka/myhttp/actions/workflows/release.yml/badge.svg?branch=main&event=release)](https://github.com/MinatoAka/myhttp/actions/workflows/release.yml)
+[![Go](https://github.com/MinatoAka/myhttp/actions/workflows/go.yml/badge.svg)](https://github.com/MinatoAka/myhttp/actions/workflows/go.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support via Saweria](https://img.shields.io/badge/Support-Saweria-orange)](https://saweria.co/AKaAturDompet)
 
