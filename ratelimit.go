@@ -15,6 +15,10 @@ type rateLimitTransport struct {
 }
 
 func newRateLimitTransport(base http.RoundTripper, reqPerSec int) *rateLimitTransport {
+	// Guard: cegah panic divide by zero
+	if reqPerSec <= 0 {
+		reqPerSec = 1
+	}
 	return &rateLimitTransport{
 		base:     base,
 		interval: time.Second / time.Duration(reqPerSec),
@@ -22,20 +26,18 @@ func newRateLimitTransport(base http.RoundTripper, reqPerSec int) *rateLimitTran
 }
 
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Kunci agar request lain menunggu giliran
+	ctx := req.Context()
+
 	t.mu.Lock()
-	
-	// Hitung waktu yang berlalu sejak request terakhir
 	elapsed := time.Since(t.lastReq)
 	if elapsed < t.interval {
-		// Jika terlalu cepat, tidur sejenak
-		time.Sleep(t.interval - elapsed)
+		// Gunakan sleepCtx agar bisa dibangunkan oleh context
+		if !sleepCtx(ctx, t.interval-elapsed) {
+			t.mu.Unlock()
+			return nil, ctx.Err()
+		}
 	}
-	
-	// Catat waktu request ini
 	t.lastReq = time.Now()
-	
-	// Lepas kunci
 	t.mu.Unlock()
 
 	return t.base.RoundTrip(req)
