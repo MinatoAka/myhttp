@@ -20,7 +20,7 @@ go get github.com/MinatoAka/myhttp
 ```go
 client := myhttp.New(
     myhttp.WithRetry(3, time.Second),
-    myhttp.WithRetryPost(true), // true or false
+    myhttp.WithRetryPOST(true), // true or false
     myhttp.WithRateLimit(5),
     myhttp.WithTimeout(10*time.Second),
     myhttp.WithUserAgent("myapp/1.0"),
