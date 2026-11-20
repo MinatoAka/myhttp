@@ -9,7 +9,8 @@ type options struct {
 	rateLimit     int           // request per detik (0 = unlimited)
 	timeout       time.Duration
 	userAgent     string
-	dnsURL        string        // <-- URL untuk custom DNS resolution
+	dnsURL        string        // URL untuk custom DNS resolution
+	retryPOST     bool          // Izinkan retry untuk method POST (default: false)
 }
 
 // Option — tipe fungsi yang memodifikasi options
@@ -52,5 +53,13 @@ func WithDNS(dnsURL string) Option {
 		} else {
 			o.dnsURL = dnsURL
 		}
+	}
+}
+
+// WithRetryPOST — Aktifkan retry untuk request POST.
+// Default: false (Aman, mencegah duplikasi order pada bot trading).
+func WithRetryPOST(enable bool) Option {
+	return func(o *options) {
+		o.retryPOST = enable
 	}
 }
