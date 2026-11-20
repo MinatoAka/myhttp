@@ -11,9 +11,8 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
-// newDNSTransport membuat http.Transport dengan custom DNS resolution via HTTPS.
-// Nama dibuat umum agar implementasi internal (DoH/DoT/dll) bisa diubah tanpa
-// memengaruhi API publik.
+// newDNSTransport membuat http.Transport dengan custom DNS resolution via HTTPS (DoH).
+// Nama dibuat umum agar implementasi internal bisa diubah tanpa memengaruhi API publik.
 func newDNSTransport(dnsURL string) *http.Transport {
 	// Client khusus untuk request DNS (menggunakan DefaultTransport agar tidak recursive/infinite loop)
 	dnsClient := &http.Client{
@@ -26,6 +25,17 @@ func newDNSTransport(dnsURL string) *http.Transport {
 			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, err
+			}
+
+			// PENTING: Jika host sudah berupa IP address (misal: 127.0.0.1 atau ::1), 
+			// lewati resolusi DNS dan langsung connect. Ini mencegah error saat 
+			// testing dengan httptest.NewServer atau request ke IP langsung.
+			if net.ParseIP(host) != nil {
+				dialer := &net.Dialer{
+					Timeout:   10 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}
+				return dialer.DialContext(ctx, network, addr)
 			}
 
 			// 1. Build DNS Query (Type A untuk IPv4)
@@ -49,7 +59,7 @@ func newDNSTransport(dnsURL string) *http.Transport {
 			}
 
 			// 2. Kirim request POST ke endpoint DNS
-			req, err := http.NewRequestWithContext(ctx, "POST", dnsURL, bytes.NewReader(packed))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, dnsURL, bytes.NewReader(packed))
 			if err != nil {
 				return nil, fmt.Errorf("gagal buat request DNS: %w", err)
 			}
