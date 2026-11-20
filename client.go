@@ -19,8 +19,10 @@ func New(opts ...Option) *Client {
 		retryBaseWait: 1 * time.Second,
 		timeout:       15 * time.Second,
 		userAgent:     "myhttp/1.0",
+		retryPOST:     false, // Default aman: POST tidak di-retry
 	}
 
+	// Apply options
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -39,9 +41,10 @@ func New(opts ...Option) *Client {
 
 	if cfg.retries > 0 {
 		transport = &retryTransport{
-			base:    transport,
-			retries: cfg.retries,
-			wait:    cfg.retryBaseWait,
+			base:      transport,
+			retries:   cfg.retries,
+			wait:      cfg.retryBaseWait,
+			retryPOST: cfg.retryPOST, // Teruskan ke transport
 		}
 	}
 
