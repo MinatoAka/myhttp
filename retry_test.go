@@ -11,7 +11,6 @@ import (
 // TestRetryOn429 — 429 harus di-retry, bukan dianggap gagal final
 func TestRetryOn429(t *testing.T) {
 	var attempts int32
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n < 3 {
@@ -23,7 +22,6 @@ func TestRetryOn429(t *testing.T) {
 	defer server.Close()
 
 	client := New(WithRetry(3, 10*time.Millisecond))
-
 	resp, err := client.Get(server.URL)
 	if err != nil {
 		t.Fatalf("harusnya sukses setelah retry 429, err: %v", err)
@@ -41,7 +39,6 @@ func TestRetryOn429(t *testing.T) {
 // TestRetryAfterSeconds — header Retry-After harus mengalahkan backoff
 func TestRetryAfterSeconds(t *testing.T) {
 	var attempts int32
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n == 1 {
@@ -62,6 +59,7 @@ func TestRetryAfterSeconds(t *testing.T) {
 	start := time.Now()
 	resp, err := client.Get(server.URL)
 	elapsed := time.Since(start)
+
 	if err != nil {
 		t.Fatalf("harusnya sukses, err: %v", err)
 	}
@@ -80,7 +78,6 @@ func TestNoRetryOn4xx(t *testing.T) {
 	for _, code := range []int{400, 401, 403, 404, 422} {
 		t.Run(http.StatusText(code), func(t *testing.T) {
 			var attempts int32
-
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				atomic.AddInt32(&attempts, 1)
 				w.WriteHeader(code)
@@ -88,7 +85,6 @@ func TestNoRetryOn4xx(t *testing.T) {
 			defer server.Close()
 
 			client := New(WithRetry(3, 10*time.Millisecond))
-
 			resp, err := client.Get(server.URL)
 			if err != nil {
 				t.Fatalf("4xx harusnya langsung balik, bukan error: %v", err)
@@ -119,7 +115,6 @@ func TestParseRetryAfter(t *testing.T) {
 		{"sampah", "abc", 0},
 		{"tanggal lewat", "Wed, 21 Oct 2015 07:28:00 GMT", 0},
 	}
-
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			if got := parseRetryAfter(c.in); got != c.want {
