@@ -1,4 +1,4 @@
-module github.com/MinatoAka/myhttp
+module myhttp
 
 go 1.27.3
 
