@@ -5,7 +5,7 @@
 
 # myhttp
 
-A lightweight Go Secure HTTP client with configurable retries, rate limiting, timeouts, and User-Agent. Uses only the standard library.
+A lightweight Go Secure HTTP client with configurable retries, rate limiting, timeouts, User-Agent and DNS over HTTPS ⁦(DoH)⁩ support. Uses only the standard library.
 
 
 ## Install
