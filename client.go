@@ -21,7 +21,6 @@ func New(opts ...Option) *Client {
 		userAgent:     "myhttp/1.0",
 	}
 
-	// Apply options
 	for _, opt := range opts {
 		opt(&cfg)
 	}
