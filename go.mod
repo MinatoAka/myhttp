@@ -1,7 +1,5 @@
-module myhttp
+module github.com/MinatoAka/myhttp
 
 go 1.27.3
 
-require (
-    golang.org/x/net/dns/dnsmessage v0.63.0
-)
+require golang.org/x/net v0.63.0
