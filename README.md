@@ -34,6 +34,23 @@ defer resp.Body.Close()
 Import `github.com/MinatoAka/myhttp` and `time` in your Go file.
 
 
+### Secure DNS (DoH)
+Enable DNS resolution over HTTPS (DNS over HTTPS) to prevent DNS poisoning, spoofing, or ISP throttling. 
+
+```go
+// Use default secure DNS provider (Quad9)
+client := myhttp.New(
+    myhttp.WithDNS(""), 
+)
+
+// Or use a custom DoH provider (e.g., Cloudflare)
+client := myhttp.New(
+    myhttp.WithDNS("https://cloudflare-dns.com/dns-query"),
+)
+```
+*Note: Passing an empty string `""` to `WithDNS` will automatically default to Quad9 (`https://dns.quad9.net/dns-query`).*
+
+
 ## Options
 
 | Option | Description | Default |
