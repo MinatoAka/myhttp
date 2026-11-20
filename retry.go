@@ -2,9 +2,9 @@ package myhttp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
-	"context"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -13,22 +13,28 @@ import (
 )
 
 // maxRetryWait — batas atas jeda antar attempt.
-// Mencegah Retry-After besar (misal 3600) bikin request menggantung.
 const maxRetryWait = 60 * time.Second
 
 // retryTransport — RoundTripper yang retry otomatis
 type retryTransport struct {
-	base    http.RoundTripper
-	retries int
-	wait    time.Duration
+	base      http.RoundTripper
+	retries   int
+	wait      time.Duration
+	retryPOST bool // TAMBAHAN: Izinkan retry POST
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
-
 	var lastErr error
 	wait := t.wait
 	attempts := 0
+
+	// PENTING: Jika method POST dan retryPOST tidak diaktifkan, 
+	// paksa maxAttempts = 0 agar hanya dijalankan 1 kali (tanpa loop).
+	maxAttempts := t.retries
+	if req.Method == http.MethodPost && !t.retryPOST {
+		maxAttempts = 0
+	}
 
 	// Baca Body sekali di awal, simpan di memori (biar bisa di-replay tiap attempt)
 	var bodyBytes []byte
@@ -41,7 +47,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		req.Body.Close() // Tutup body asli
 	}
 
-	for attempt := 0; attempt <= t.retries; attempt++ {
+	for attempt := 0; attempt <= maxAttempts; attempt++ {
 		// Context sudah mati? Jangan buang waktu untuk attempt yang pasti gagal
 		if err := ctx.Err(); err != nil {
 			if lastErr == nil {
@@ -83,7 +89,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		// Attempt terakhir → jangan tidur
-		if attempt == t.retries {
+		if attempt == maxAttempts {
 			break
 		}
 
@@ -96,12 +102,12 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			// Jitter: random 0-500ms (hindari thundering herd)
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
 			delay = wait + jitter
-
 			wait *= 2 // Exponential backoff
 			if wait > maxRetryWait {
 				wait = maxRetryWait
 			}
 		}
+
 		if delay > maxRetryWait {
 			delay = maxRetryWait
 		}
@@ -116,21 +122,16 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // retryableStatus — status yang layak dicoba lagi.
-// 5xx = server bermasalah, 429 = rate limit (sementara).
-// 4xx lain (400/401/403/404) tidak di-retry karena retry tidak akan menolong.
 func retryableStatus(code int) bool {
 	return code >= 500 || code == http.StatusTooManyRequests
 }
 
 // parseRetryAfter — baca header Retry-After.
-// Support dua format: delta-seconds ("5") dan HTTP-date ("Wed, 21 Oct 2026 07:28:00 GMT").
-// Return 0 kalau header kosong, tidak valid, atau waktunya sudah lewat.
 func parseRetryAfter(v string) time.Duration {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return 0
 	}
-
 	// Format 1: detik
 	if secs, err := strconv.Atoi(v); err == nil {
 		if secs <= 0 {
@@ -138,27 +139,22 @@ func parseRetryAfter(v string) time.Duration {
 		}
 		return time.Duration(secs) * time.Second
 	}
-
 	// Format 2: HTTP-date
 	if when, err := http.ParseTime(v); err == nil {
 		if d := time.Until(when); d > 0 {
 			return d
 		}
 	}
-
 	return 0
 }
 
 // sleepCtx — tidur selama d, tapi langsung bangun kalau context dibatalkan.
-// Return true kalau tidur selesai normal, false kalau dipotong context.
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return ctx.Err() == nil
 	}
-
 	timer := time.NewTimer(d)
 	defer timer.Stop()
-
 	select {
 	case <-timer.C:
 		return true
