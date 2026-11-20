@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// TestRetryOn5xx — memastikan retry bekerja
+// TestRetryOn5xx — memastikan retry bekerja untuk GET
 func TestRetryOn5xx(t *testing.T) {
 	var attempts int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,8 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
-// TestRetryPostBody — Memastikan body POST tidak hilang saat retry
+// TestRetryPostBody — Memastikan body POST tidak hilang saat retry 
+// PENTING: HARUS aktifkan WithRetryPOST(true) agar test ini jalan
 func TestRetryPostBody(t *testing.T) {
 	var attempts int32
 	var receivedBody string
@@ -91,14 +92,17 @@ func TestRetryPostBody(t *testing.T) {
 		receivedBody = string(body)
 		n := atomic.AddInt32(&attempts, 1)
 		if n < 3 {
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError) // Paksa retry
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	client := New(WithRetry(3, 10*time.Millisecond))
+	client := New(
+		WithRetry(3, 10*time.Millisecond),
+		WithRetryPOST(true), // <-- WAJIB: Aktifkan manual untuk POST
+	)
 
 	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(`{"pair":"ethidr"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -114,6 +118,31 @@ func TestRetryPostBody(t *testing.T) {
 	}
 	if receivedBody != `{"pair":"ethidr"}` {
 		t.Errorf("Body hilang saat retry! Diterima: %q", receivedBody)
+	}
+}
+
+// TestNoRetryPostByDefault — POST tidak boleh di-retry secara default (aman untuk trading)
+func TestNoRetryPostByDefault(t *testing.T) {
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusInternalServerError) // Selalu gagal
+	}))
+	defer server.Close()
+
+	// Client default (tanpa WithRetryPOST)
+	client := New(WithRetry(3, 10*time.Millisecond))
+
+	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(`{"pair":"ethidr"}`))
+	resp, err := client.Do(req)
+
+	// Harusnya langsung error setelah 1 attempt
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("harusnya error karena POST tidak di-retry secara default")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, mau 1 (POST tidak boleh di-retry secara default)", attempts)
 	}
 }
 
@@ -197,7 +226,6 @@ func TestDNSWithLocalServer(t *testing.T) {
 // TestDNSChainIntegration — memastikan DNS transport terintegrasi dengan retry dan rate limit
 func TestDNSChainIntegration(t *testing.T) {
 	var attempts int32
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n < 2 {
