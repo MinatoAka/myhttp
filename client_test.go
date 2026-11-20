@@ -14,8 +14,6 @@ import (
 // TestRetryOn5xx — memastikan retry bekerja
 func TestRetryOn5xx(t *testing.T) {
 	var attempts int32
-
-	// Server yang selalu balas 500 (kecuali attempt terakhir)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n < 3 {
@@ -79,7 +77,6 @@ func TestRateLimit(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	// 3 request dengan limit 5/detik minimal butuh ~400ms
 	if elapsed < 350*time.Millisecond {
 		t.Errorf("terlalu cepat: %v (harusnya ≥400ms)", elapsed)
 	}
@@ -89,13 +86,12 @@ func TestRateLimit(t *testing.T) {
 func TestRetryPostBody(t *testing.T) {
 	var attempts int32
 	var receivedBody string
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		receivedBody = string(body)
 		n := atomic.AddInt32(&attempts, 1)
 		if n < 3 {
-			w.WriteHeader(http.StatusInternalServerError) // Paksa retry
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -104,7 +100,6 @@ func TestRetryPostBody(t *testing.T) {
 
 	client := New(WithRetry(3, 10*time.Millisecond))
 
-	// Kirim POST dengan body JSON
 	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(`{"pair":"ethidr"}`))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -125,14 +120,12 @@ func TestRetryPostBody(t *testing.T) {
 // TestRetryContextCancel — retry harus berhenti cepat saat context dibatalkan
 func TestRetryContextCancel(t *testing.T) {
 	var attempts int32
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&attempts, 1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	// Base wait besar: kalau tidur tidak sadar context, test ini bakal sangat lama
 	client := New(WithRetry(5, 2*time.Second))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -155,28 +148,29 @@ func TestRetryContextCancel(t *testing.T) {
 	}
 }
 
+// ==========================================
+// TEST BARU UNTUK FITUR DNS
+// ==========================================
+
 // TestWithDNSOption — memastikan option WithDNS bekerja dengan benar
 func TestWithDNSOption(t *testing.T) {
-	// Test 1: WithDNS dengan string kosong harus set default Quad9
 	client1 := New(WithDNS(""))
 	if client1 == nil {
 		t.Fatal("client tidak boleh nil")
 	}
 
-	// Test 2: WithDNS dengan URL custom
 	client2 := New(WithDNS("https://cloudflare-dns.com/dns-query"))
 	if client2 == nil {
 		t.Fatal("client tidak boleh nil")
 	}
 
-	// Test 3: Client tanpa WithDNS tetap bisa dibuat (backward compatible)
 	client3 := New(WithRetry(3, time.Second))
 	if client3 == nil {
 		t.Fatal("client tidak boleh nil")
 	}
 }
 
-// TestDNSWithLocalServer — memastikan client dengan DNS custom tetap bisa request ke server lokal
+// TestDNSWithLocalServer — memastikan client dengan DNS custom tetap bisa request ke server lokal (IP bypass)
 func TestDNSWithLocalServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -184,9 +178,6 @@ func TestDNSWithLocalServer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Buat client dengan DNS custom (pakai Quad9 default)
-	// Note: Test ini akan mencoba resolve DNS via Quad9, tapi karena server.URL adalah localhost/127.0.0.1,
-	// DNS resolution tidak diperlukan (langsung connect ke IP lokal)
 	client := New(
 		WithDNS(""),
 		WithTimeout(5*time.Second),
@@ -194,11 +185,7 @@ func TestDNSWithLocalServer(t *testing.T) {
 
 	resp, err := client.Get(server.URL)
 	if err != nil {
-		// Kalau error karena Quad9 tidak reachable, skip test (bukan failure)
-		if strings.Contains(err.Error(), "DNS") || strings.Contains(err.Error(), "dial") {
-			t.Skipf("Skip test karena DNS server tidak reachable: %v", err)
-		}
-		t.Fatalf("request gagal: %v", err)
+		t.Fatalf("request ke local server gagal (IP bypass tidak bekerja): %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -221,7 +208,6 @@ func TestDNSChainIntegration(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Client dengan DNS + Retry + RateLimit
 	client := New(
 		WithDNS(""),
 		WithRetry(3, 10*time.Millisecond),
@@ -231,9 +217,6 @@ func TestDNSChainIntegration(t *testing.T) {
 
 	resp, err := client.Get(server.URL)
 	if err != nil {
-		if strings.Contains(err.Error(), "DNS") || strings.Contains(err.Error(), "dial") {
-			t.Skipf("Skip test karena DNS server tidak reachable: %v", err)
-		}
 		t.Fatalf("request gagal: %v", err)
 	}
 	defer resp.Body.Close()
