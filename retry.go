@@ -100,7 +100,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			delay = retryAfter
 		} else {
 			// Jitter: random 0-500ms (hindari thundering herd)
-			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+			jitter := time.Duration(rand.Intn(2000)) * time.Millisecond
 			delay = wait + jitter
 			wait *= 2 // Exponential backoff
 			if wait > maxRetryWait {
